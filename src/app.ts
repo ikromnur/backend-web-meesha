@@ -143,6 +143,11 @@ app.use("/api/notifications", notificationRoutes); // Add notification routes
 // Payment Routes (Tripay)
 app.use("/api/payments/tripay", tripayRoutes);
 
+// Root route untuk mengecek status server
+app.get("/", (req, res) => {
+  res.send("Backend Meesha is running! 🚀");
+});
+
 // Tripay Callback
 app.post("/api/callback/tripay", async (req: ExpressRequest, res) => {
   try {

@@ -162,6 +162,19 @@ export class DiscountService {
 
   async remove(id: string): Promise<Discount> {
     await this.findOne(id);
+
+    // Check if usage exists
+    const usageCount = await this.prisma.discountUsage.count({
+      where: { discountId: id },
+    });
+
+    if (usageCount > 0) {
+      throw new HttpError(
+        409,
+        "Diskon ini sudah pernah digunakan dan tidak dapat dihapus. Silakan nonaktifkan (set ke INACTIVE) saja."
+      );
+    }
+
     return this.discountRepository.remove(id);
   }
 

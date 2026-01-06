@@ -4,3 +4,5 @@ dist
 ngrok
 coverage
 .DS_Store
+.vercel
+

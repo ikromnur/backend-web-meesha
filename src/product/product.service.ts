@@ -6,33 +6,61 @@ import {
   getAllColors,
   getAllObjectives,
   getAllProducts,
-  getAllTypes,
+  getProductsCount,
+  // getAllTypes,
   updateProduct,
 } from "./product.repository";
-import { Product, ProductFilter } from "../types/product";
+import { Product, ProductFilter, ImageAsset } from "../types/product";
 import {
   deleteImageFromCloudinary,
   uploadImageToCloudinary,
 } from "./cloudinary.service";
 import { getCachedData, setCachedData } from "../utils/cache";
+import prisma from "../lib/prisma";
+import { HttpError } from "../utils/http-error";
+
+const normalizeImages = (v: any): ImageAsset[] => {
+  if (!v) return [];
+  if (Array.isArray(v)) {
+    return v
+      .filter((x) => x && typeof x === "object" && x.url && x.publicId)
+      .map((x) => ({ url: String(x.url), publicId: String(x.publicId) }));
+  }
+  if (typeof v === "object" && (v as any).url && (v as any).publicId) {
+    return [
+      { url: String((v as any).url), publicId: String((v as any).publicId) },
+    ];
+  }
+  if (typeof v === "string") {
+    return [{ url: v, publicId: "" }];
+  }
+  return [];
+};
 
 export const createProductService = async (
   data: Product,
-  file: Express.Multer.File | undefined
+  files: Express.Multer.File[] | undefined
 ) => {
   const existing = await getAllProducts({ name: data.name });
   if (existing.length > 0) {
     throw new Error("Product with this name already exists");
   }
 
-  let imageUrl = undefined;
-  if (file) {
+  let imageUrl: ImageAsset[] | undefined = undefined;
+  if (files && files.length) {
+    if (files.length > 5) {
+      throw new Error("Maksimum 5 gambar diperbolehkan");
+    }
     try {
-      const uploadResult = await uploadImageToCloudinary(file.buffer);
-      imageUrl = {
-        url: uploadResult.secure_url,
-        publicId: uploadResult.public_id,
-      };
+      const uploads: ImageAsset[] = [];
+      for (const f of files) {
+        const uploadResult = await uploadImageToCloudinary(f.buffer);
+        uploads.push({
+          url: uploadResult.secure_url,
+          publicId: uploadResult.public_id,
+        });
+      }
+      imageUrl = uploads;
     } catch (error) {
       if (error instanceof Error) {
         console.error("Image upload failed:", error.message);
@@ -47,26 +75,34 @@ export const createProductService = async (
 };
 
 export const getAllProductsService = async (filters: ProductFilter = {}) => {
-  const page = filters.page ?? 1;
-  const limit = filters.limit ?? 10;
-  const skip = (page - 1) * limit;
+  const MAX_LIMIT = 1000;
+  const page = filters.page && filters.page > 0 ? filters.page : 1;
+  const limitRaw = filters.limit && filters.limit > 0 ? filters.limit : 10;
+  const limit = Math.min(limitRaw, MAX_LIMIT);
+
+  // Hitung total item sebelum query data untuk akurasi
+  const totalItems = await getProductsCount(filters);
+
+  // Jika limit besar atau totalItems <= limit, set satu halaman dan skip=0
+  const isSinglePage = totalItems <= limit;
+  const skip = isSinglePage ? 0 : (page - 1) * limit;
 
   const products = await getAllProducts(filters, skip, limit);
 
-  const total = products.length;
+  const totalPages = limit > 0 ? Math.ceil(totalItems / limit) || 1 : 1;
 
   return {
     data: products,
-    total,
-    page,
-    totalPages: Math.ceil(total / limit),
+    total: totalItems,
+    page: page,
+    totalPages: totalPages,
   };
 };
 
 export const getProductByIdService = async (id: string) => {
   const product = await findProductById(id);
   if (!product) {
-    throw new Error("Product not found");
+    throw new HttpError(404, "Product not found");
   }
   return product;
 };
@@ -74,32 +110,43 @@ export const getProductByIdService = async (id: string) => {
 export const updateProductService = async (
   id: string,
   data: Partial<Product>,
-  file: Express.Multer.File | undefined
+  files: Express.Multer.File[] | undefined,
+  removeImagePublicIds?: string[]
 ) => {
   console.log("sampe service");
   const existing = await findProductById(id);
-  if (!existing) throw new Error("Product not found");
+  if (!existing) throw new HttpError(404, "Product not found");
 
-  let imageUrl: { url: string; publicId: string } | undefined = undefined;
+  // Normalize images from existing
+  let images: ImageAsset[] = normalizeImages((existing as any).imageUrl);
 
-  if (file) {
-    try {
-      const existingImageUrl = existing.imageUrl;
-
-      if (
-        existingImageUrl &&
-        typeof existingImageUrl === "object" &&
-        "publicId" in existingImageUrl &&
-        typeof existingImageUrl.publicId === "string"
-      ) {
-        await deleteImageFromCloudinary(existingImageUrl.publicId);
+  // Remove selected images
+  if (removeImagePublicIds && removeImagePublicIds.length) {
+    const set = new Set(removeImagePublicIds);
+    const toDelete = images.filter((img) => set.has(img.publicId));
+    for (const img of toDelete) {
+      try {
+        if (img.publicId) await deleteImageFromCloudinary(img.publicId);
+      } catch (error) {
+        console.warn("Failed to delete image from Cloudinary:", error);
       }
+    }
+    images = images.filter((img) => !set.has(img.publicId));
+  }
 
-      const uploadResult = await uploadImageToCloudinary(file.buffer);
-      imageUrl = {
-        url: uploadResult.secure_url,
-        publicId: uploadResult.public_id,
-      };
+  // Upload new files
+  if (files && files.length) {
+    if (images.length + files.length > 5) {
+      throw new Error("Total gambar melebihi batas 5");
+    }
+    try {
+      for (const f of files) {
+        const uploadResult = await uploadImageToCloudinary(f.buffer);
+        images.push({
+          url: uploadResult.secure_url,
+          publicId: uploadResult.public_id,
+        });
+      }
     } catch (error) {
       console.error("Image upload failed:", error);
       throw new Error(
@@ -114,10 +161,9 @@ export const updateProductService = async (
     ...data,
   };
 
-  // Jika ada imageUrl baru, tambahkan ke updatedData
-  if (imageUrl) {
-    updatedData.imageUrl = imageUrl;
-  }
+  // Simpan array gambar ke field Json imageUrl
+  // FIX: Menggunakan 'images' secara langsung agar jika kosong tetap terupdate menjadi [] di DB
+  updatedData.imageUrl = images;
 
   // Melakukan update produk di database
   const updated = await updateProduct(id, updatedData);
@@ -130,26 +176,25 @@ export const deleteProductService = async (id: string) => {
   if (!existing) {
     throw new Error("Product not found");
   }
+  // Selalu hard delete
+  await prisma.orderItem.deleteMany({ where: { productId: id } });
 
-  if (
-    existing.imageUrl &&
-    typeof existing.imageUrl === "object" &&
-    "publicId" in existing.imageUrl
-  ) {
+  const images = normalizeImages((existing as any).imageUrl);
+  for (const img of images) {
     try {
-      const { publicId } = existing.imageUrl as { publicId: string };
-      await deleteImageFromCloudinary(publicId);
+      if (img.publicId) await deleteImageFromCloudinary(img.publicId);
     } catch (error) {
-      console.error("Failed to delete image from Cloudinary:", error);
+      console.warn("Failed to delete image from Cloudinary:", error);
     }
   }
 
-  return await deleteProduct(id);
+  const deleted = await deleteProduct(id);
+  return deleted;
 };
 
 export const getMetaService = async () => {
   let categories = getCachedData("categories");
-  let types = getCachedData("types");
+  // let types = getCachedData("types");
   let objectives = getCachedData("objectives");
   let colors = getCachedData("colors");
 
@@ -158,10 +203,12 @@ export const getMetaService = async () => {
     setCachedData("categories", categories);
   }
 
+  /*
   if (!types) {
     types = await getAllTypes();
     setCachedData("types", types);
   }
+  */
 
   if (!objectives) {
     objectives = await getAllObjectives();
@@ -173,10 +220,14 @@ export const getMetaService = async () => {
     setCachedData("colors", colors);
   }
 
+  // Tambahkan sizes untuk UI: enum konsisten yang digunakan frontend
+  const sizes = ["S", "M", "L", "XL", "XXL"];
+
   return {
     categories,
-    types,
+    // types,
     objectives,
     colors,
+    sizes,
   };
 };

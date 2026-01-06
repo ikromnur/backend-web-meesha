@@ -1,8 +1,6 @@
 import type { Request, Response, NextFunction } from "express"
 import jwt from "jsonwebtoken"
-import { PrismaClient } from "@prisma/client"
-
-const prisma = new PrismaClient()
+import prisma from "../lib/prisma"
 
 interface JwtPayload {
   userId: string
@@ -26,7 +24,7 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
     const authHeader = req.headers.authorization
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ message: "Akses ditolak. Token tidak ada" })
+      return res.status(401).json({ error: { code: "UNAUTHORIZED", message: "Akses ditolak. Token tidak ada" } })
     }
 
     const token = authHeader.split(" ")[1]
@@ -41,7 +39,7 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
 
       next()
     } catch (error) {
-      return res.status(401).json({ message: "Token tidak valid" })
+      return res.status(401).json({ error: { code: "UNAUTHORIZED", message: "Token tidak valid" } })
     }
   } catch (error) {
     next(error)
@@ -50,7 +48,7 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
 
 export const authorizeAdmin = (req: Request, res: Response, next: NextFunction) => {
   if (!req.user || req.user.role !== "ADMIN") {
-    return res.status(403).json({ message: "Akses ditolak. Hanya admin yang diizinkan" })
+    return res.status(403).json({ error: { code: "FORBIDDEN", message: "Akses ditolak. Hanya admin yang diizinkan" } })
   }
   next()
 }

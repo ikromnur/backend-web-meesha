@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
 }
 
 datasource db {
@@ -9,48 +10,239 @@ datasource db {
 }
 
 model User {
-  id            String   @id @default(uuid())
-  name          String
-  email         String   @unique
-  password      String
-  phone         String?
-  role          Role     @default(USER)
-  photo_profile String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @default(now()) @updatedAt
-  orders        Order[]
+  id                       String    @id @default(uuid())
+  name                     String
+  email                    String    @unique
+  password                 String
+  phone                    String?
+  role                     Role      @default(USER)
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @default(now()) @updatedAt
+  photo_profile            String?
+  passwordResetExpires     DateTime?
+  passwordResetToken       String?
+  username                 String?   @unique
+  isVerified               Boolean   @default(false)
+  passwordResetWindowUntil DateTime? @db.Timestamp(6)
+  carts                    Cart[]
+  orders                   Order[]
+  productRatings           ProductRating[]
+  notifications            Notification[]
+  messages                 Message[]
+
+  @@index([phone])
 }
 
 model Message {
-  id        String   @id @default(uuid())
-  name      String
-  email     String
-  phone     String
-  message   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  senderName  String
+  senderEmail String
+  phone       String?
+  userId      String?
+  subject     String
+  body        String
+  isRead      Boolean        @default(false)
+  id          Int            @id @default(autoincrement())
+  replies     MessageReply[]
+  user        User?          @relation(fields: [userId], references: [id])
+}
+
+model MessageReply {
+  id         Int      @id @default(autoincrement())
+  messageId  Int
+  replyText  String
+  adminName  String?
+  adminEmail String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  message    Message  @relation(fields: [messageId], references: [id])
 }
 
 model Product {
-  id          String      @id @default(uuid())
+  id          String        @id @default(uuid())
   name        String
-  price       Float       @default(0)
-  stock       Int         @default(0)
   description String?
+  price       Float         @default(0)
+  stock       Int           @default(0)
+  sold        Int           @default(0)
+  availability Availability @default(READY)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  categoryId  String?
+  colorId     String?
+  objectiveId String?
+  // typeId      String?
+  variant     String[]
   imageUrl    Json?
   size        Size?
-  variant     String[]
-  categoryId  String?
-  typeId      String?
-  objectiveId String?
-  colorId     String?
-  category    Category?   @relation(fields: [categoryId], references: [id])
-  type        Type?       @relation(fields: [typeId], references: [id])
-  objective   Objective?  @relation(fields: [objectiveId], references: [id])
-  color       Color?      @relation(fields: [colorId], references: [id])
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  carts       Cart[]
   orderItems  OrderItem[]
+  category    Category?     @relation(fields: [categoryId], references: [id])
+  color       Color?        @relation(fields: [colorId], references: [id])
+  objective   Objective?    @relation(fields: [objectiveId], references: [id])
+  // type        Type?         @relation(fields: [typeId], references: [id])
+  views       ProductView[]
+  ratings     ProductRating[]
+}
+
+model Color {
+  id        String    @id @default(uuid())
+  name      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @default(now()) @updatedAt
+  key       String    @unique
+  products  Product[]
+}
+
+model Objective {
+  id        String    @id @default(uuid())
+  name      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @default(now()) @updatedAt
+  key       String    @unique
+  products  Product[]
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now()) @updatedAt
+  key         String    @unique
+  description String?
+  products    Product[]
+}
+
+model Order {
+  id                String      @id @default(uuid())
+  userId            String
+  totalAmount       Float
+  status            OrderStatus @default(PENDING)
+  shippingAddress   String
+  paymentMethod     String
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @default(now()) @updatedAt
+  paidAt            DateTime?
+  paymentMethodCode String?
+  paymentExpiresAt  DateTime?
+  discountCode      String? // Added to track used discount code for un-paid orders
+  pickupAt          DateTime?
+  minPickupAt       DateTime?
+  pickupReadyAt     DateTime?
+  pickedUpAt        DateTime?
+  pickedUpById      String?
+  tripayReference   String?
+  pickupHistory     Json?
+  
+  // New fields for reminders
+  reminderH1Sent    Boolean     @default(false)
+  reminderH1hSent   Boolean     @default(false)
+
+  user              User        @relation(fields: [userId], references: [id])
+  orderItems        OrderItem[]
+  ratings           ProductRating[]
+
+  @@index([createdAt, status])
+  @@index([pickupAt])
+  @@index([paymentExpiresAt])
+  @@index([pickedUpAt])
+}
+
+model OrderItem {
+  id        String  @id @default(uuid())
+  orderId   String
+  productId String
+  quantity  Int
+  price     Float
+  order     Order   @relation(fields: [orderId], references: [id])
+  product   Product @relation(fields: [productId], references: [id])
+}
+
+model OtpCode {
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email       String
+  otpHash     String
+  purpose     OtpPurpose
+  attempts    Int        @default(0)
+  expiresAt   DateTime   @db.Timestamp(6)
+  lockedUntil DateTime?  @db.Timestamp(6)
+  createdAt   DateTime   @default(now()) @db.Timestamp(6)
+  updatedAt   DateTime   @default(now()) @updatedAt @db.Timestamp(6)
+
+  @@index([email])
+  @@index([email, purpose])
+}
+
+model Discount {
+  id              String         @id @default(cuid())
+  code            String         @unique
+  value           Decimal
+  type            DiscountType
+  startDate       DateTime
+  endDate         DateTime
+  status          DiscountStatus @default(ACTIVE)
+  maxUsage        Int?           // Total usage limit
+  maxUsagePerUser Int?           // Per-user usage limit
+  usedCount       Int            @default(0) // Current global usage count
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  usages          DiscountUsage[]
+}
+
+model DiscountUsage {
+  id         String   @id @default(cuid())
+  discountId String
+  userId     String
+  orderId    String?
+  usedAt     DateTime @default(now())
+
+  discount   Discount @relation(fields: [discountId], references: [id])
+  
+  @@unique([discountId, orderId]) // Idempotency per order
+  @@index([discountId, userId])
+}
+
+model Cart {
+  id        String   @id @default(uuid())
+  userId    String
+  productId String
+  quantity  Int      @default(1)
+  size      Size?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId, size])
+}
+
+model ProductView {
+  id         String   @id @default(uuid())
+  productId  String
+  ipHash     String
+  viewBucket DateTime
+  createdAt  DateTime @default(now())
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, ipHash, viewBucket], name: "productId_ipHash_viewBucket")
+  @@index([productId, createdAt])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  type      NotificationType @default(INFO)
+  isRead    Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
 }
 
 enum Size {
@@ -61,74 +253,67 @@ enum Size {
   XXL
 }
 
-model Type {
-  id        String    @id @default(uuid())
-  key       String    @unique
-  name      String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @default(now()) @updatedAt
-  products  Product[]
-}
-
-model Color {
-  id        String    @id @default(uuid())
-  key       String    @unique
-  name      String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @default(now()) @updatedAt
-  products  Product[]
-}
-
-model Objective {
-  id        String    @id @default(uuid())
-  key       String    @unique
-  name      String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @default(now()) @updatedAt
-  products  Product[]
-}
-
-model Category {
-  id        String    @id @default(uuid())
-  key       String    @unique
-  name      String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @default(now()) @updatedAt
-  products  Product[]
-}
-
-model Order {
-  id              String      @id @default(uuid())
-  userId          String
-  user            User        @relation(fields: [userId], references: [id])
-  totalAmount     Float
-  status          OrderStatus @default(PENDING)
-  shippingAddress String
-  paymentMethod   String
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @default(now()) @updatedAt
-  orderItems      OrderItem[]
-}
-
-model OrderItem {
-  id        String  @id @default(uuid())
-  orderId   String // Ganti menjadi String agar konsisten
-  order     Order   @relation(fields: [orderId], references: [id])
-  productId String // Ganti menjadi String agar konsisten
-  product   Product @relation(fields: [productId], references: [id])
-  quantity  Int
-  price     Float
-}
-
 enum Role {
   USER
   ADMIN
 }
 
 enum OrderStatus {
-  ALL // Semua
-  PENDING // Pending
-  PROCESSING // Diproses
-  COMPLETED // Selesai
-  CANCELLED // Dibatalkan
+  ALL
+  PENDING
+  PROCESSING
+  READY_FOR_PICKUP
+  COMPLETED
+  CANCELLED
+  PICKED_UP
+}
+
+enum Availability {
+  READY
+  PO_2_DAY
+  PO_5_DAY
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+enum DiscountStatus {
+  ACTIVE
+  INACTIVE
+  EXPIRED
+}
+
+enum OtpPurpose {
+  REGISTER
+  FORGOT_PASSWORD
+}
+
+enum NotificationType {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
+}
+
+model ProductRating {
+  id        String   @id @default(uuid())
+  userId    String
+  productId String
+  orderId   String?
+  rating    Int
+  comment   String?
+  reply     String?
+  replyAt   DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  order     Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, productId, orderId], name: "userId_productId_orderId")
+  @@index([productId])
+  @@index([userId])
 }

@@ -393,9 +393,14 @@ export const processTripayCallback = async (
   rawBody?: string,
   headerSignature?: string
 ) => {
+  console.log("--- [Tripay Callback Start] ---");
+  console.log("Headers Signature:", headerSignature);
+  console.log("Payload:", JSON.stringify(payload, null, 2));
+
   const merchantCode = process.env.TRIPAY_MERCHANT_CODE || "";
   const privateKey = process.env.TRIPAY_PRIVATE_KEY || "";
   if (!merchantCode || !privateKey) {
+    console.error("[Tripay Callback] Missing ENV credentials");
     throw new Error("Tripay env not set");
   }
 
@@ -403,12 +408,17 @@ export const processTripayCallback = async (
   const raw =
     typeof rawBody === "string" && rawBody.length > 0 ? rawBody : undefined;
   const sigHeader = headerSignature || payload?.signature || "";
+
   if (raw) {
     const expectedHmac = require("crypto")
       .createHmac("sha256", privateKey)
       .update(raw)
       .digest("hex");
+
     if (String(sigHeader).toLowerCase() !== expectedHmac.toLowerCase()) {
+      console.error(
+        `[Tripay Callback] Invalid Signature (Raw Body). Expected: ${expectedHmac}, Received: ${sigHeader}`
+      );
       const err: any = new Error("Invalid signature");
       err.status = 403;
       throw err;
@@ -423,11 +433,16 @@ export const processTripayCallback = async (
       Number(amount)
     );
     if (String(signature).toLowerCase() !== expected.toLowerCase()) {
+      console.error(
+        `[Tripay Callback] Invalid Signature (Manual Build). Expected: ${expected}, Received: ${signature}`
+      );
       const err: any = new Error("Invalid signature");
       err.status = 403;
       throw err;
     }
   }
+
+  console.log("[Tripay Callback] Signature Valid. Processing Order...");
 
   // 2) Parse payload dari raw bila tersedia untuk konsistensi
   let p = payload || {};

@@ -251,7 +251,11 @@ router.get(
       );
 
       orders = await prisma.order.findMany(queryOptions);
-      console.log(`[getOrders] Found ${orders.length} orders`);
+      console.log(`[getOrders] Found ${orders.length} orders directly from DB`);
+      if (orders.length > 0) {
+        console.log(`[getOrders] Sample Order IDs: ${orders.slice(0, 3).map(o => o.id).join(", ")}`);
+        console.log(`[getOrders] Sample Order Statuses: ${orders.slice(0, 3).map(o => o.status).join(", ")}`);
+      }
 
       // Check Expiration Logic (Lazy Check)
       // Jika order PENDING dan sudah melewati paymentExpiresAt, tandai CANCELLED

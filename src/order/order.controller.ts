@@ -208,11 +208,17 @@ router.get(
 
       const statusFilterMap: Record<string, string[]> = {
         pending: ["PENDING", "UNPAID", "NEW"],
-        processing: ["PROCESSING", "IN_PROGRESS", "PAID"], // PAID dianggap sedang diproses
-        ambil: ["READY_FOR_PICKUP"], // Tab khusus untuk barang yang siap diambil
-        completed: ["COMPLETED", "SUCCESS", "PICKED_UP"], // PICKED_UP juga berarti selesai
+        processing: [
+          "PROCESSING",
+          "IN_PROGRESS",
+          "PAID",
+          "SUCCESS",
+          "READY_FOR_PICKUP",
+        ],
+        ambil: ["READY_FOR_PICKUP"], // Tab khusus jika diperlukan
+        completed: ["COMPLETED", "PICKED_UP"],
         cancelled: ["CANCELLED", "FAILED", "EXPIRED", "REFUNDED"],
-        all: [], // Fallback jika diperlukan, tapi tidak direkomendasikan untuk default
+        all: [],
       };
 
       const statusFilter = statusFilterMap[qStatus];
@@ -253,8 +259,18 @@ router.get(
       orders = await prisma.order.findMany(queryOptions);
       console.log(`[getOrders] Found ${orders.length} orders directly from DB`);
       if (orders.length > 0) {
-        console.log(`[getOrders] Sample Order IDs: ${orders.slice(0, 3).map(o => o.id).join(", ")}`);
-        console.log(`[getOrders] Sample Order Statuses: ${orders.slice(0, 3).map(o => o.status).join(", ")}`);
+        console.log(
+          `[getOrders] Sample Order IDs: ${orders
+            .slice(0, 3)
+            .map((o) => o.id)
+            .join(", ")}`
+        );
+        console.log(
+          `[getOrders] Sample Order Statuses: ${orders
+            .slice(0, 3)
+            .map((o) => o.status)
+            .join(", ")}`
+        );
       }
 
       // Check Expiration Logic (Lazy Check)

@@ -3,6 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: meesha-backend:latest
     container_name: meesha-backend
     ports:
       - "4001:4000"

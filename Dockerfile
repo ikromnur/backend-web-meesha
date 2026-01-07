@@ -15,7 +15,7 @@ RUN npm install --ignore-scripts
 # Copy the rest of the application (including prisma/schema.prisma)
 COPY . .
 
-# Generate Prisma Client explicitly now that schema is present
+# Generate Prisma Client (ensure it's fresh)
 RUN npx prisma generate
 
 # Build backend

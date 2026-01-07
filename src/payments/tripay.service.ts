@@ -338,13 +338,10 @@ export const createClosedTransaction = async (params: {
     })),
     // Gunakan TRIPAY_CALLBACK_URL jika tersedia; fallback ke CALLBACK_URL
     callback_url: process.env.TRIPAY_CALLBACK_URL || process.env.CALLBACK_URL,
-    // Sertakan merchant_ref di query agar halaman frontend bisa langsung resolve
+    // Redirect ke halaman riwayat order (/history) sesuai permintaan user
     return_url: `${(
       process.env.APP_BASE_URL || "http://localhost:3000"
-    ).replace(
-      /\/$/,
-      ""
-    )}/orders/${merchantRef}/payment?merchant_ref=${merchantRef}`,
+    ).replace(/\/$/, "")}/history`,
     signature,
   };
 

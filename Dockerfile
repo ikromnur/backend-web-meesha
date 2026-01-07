@@ -9,10 +9,13 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies IGNORING scripts to prevent 'prisma generate' from running before schema is copied
-RUN npm install --ignore-scripts
+# Copy prisma schema early so postinstall (prisma generate) works
+COPY prisma ./prisma/
 
-# Copy the rest of the application (including prisma/schema.prisma)
+# Install dependencies (WITH scripts to build bcrypt/sharp/prisma)
+RUN npm install
+
+# Copy the rest of the application
 COPY . .
 
 # Generate Prisma Client (ensure it's fresh)

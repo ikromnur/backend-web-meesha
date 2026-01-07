@@ -203,8 +203,8 @@ router.get(
       const userId = req.user?.userId;
       const role = req.user?.role;
 
-      // Default filter 'pending' agar user langsung fokus ke tagihan
-      const qStatus = String(req.query.status || "pending").toLowerCase();
+      // Default filter 'all' agar frontend menerima semua data dan bisa filter client-side
+      const qStatus = String(req.query.status || "all").toLowerCase();
 
       const statusFilterMap: Record<string, string[]> = {
         pending: ["PENDING", "UNPAID", "NEW"],

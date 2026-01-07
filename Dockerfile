@@ -1,7 +1,7 @@
-# Use Debian-based image for better compatibility
-FROM node:20-slim
+# Use standard Node image (Debian) for maximum compatibility with native modules (sharp, bcrypt)
+FROM node:20
 
-# Install OpenSSL (required for Prisma) and build tools
+# Install build tools just in case (though node:20 has many)
 RUN apt-get update -y && apt-get install -y openssl python3 make g++ && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

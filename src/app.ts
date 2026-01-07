@@ -42,6 +42,23 @@ import notificationRoutes from "./notification/notification.controller";
 
 // Variabel lingkungan sudah dimuat oleh import 'dotenv/config' di atas
 
+console.log("Starting application...");
+console.log("NODE_ENV:", process.env.NODE_ENV);
+console.log("PORT:", process.env.PORT);
+
+// Global Error Handlers
+process.on("uncaughtException", (err) => {
+  console.error("UNCAUGHT EXCEPTION! Shutting down...");
+  console.error(err);
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (err) => {
+  console.error("UNHANDLED REJECTION! Shutting down...");
+  console.error(err);
+  process.exit(1);
+});
+
 // Inisialisasi aplikasi Express
 const app = express();
 const PORT = Number(process.env.PORT || 4000);

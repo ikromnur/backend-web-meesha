@@ -6,7 +6,7 @@ services:
     image: meesha-backend:latest
     container_name: meesha-backend
     ports:
-      - "4001:4000"
+      - "4000:4000"
     environment:
       - PORT=4000
       # Ganti dengan kredensial database & Tripay yang asli

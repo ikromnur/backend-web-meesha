@@ -7,5 +7,5 @@ COPY . .
 # Build backend
 RUN npm run build
 EXPOSE 4000
-# Command untuk menjalankan production
+# Pastikan command ini sesuai dengan cara Anda menjalankan backend di production
 CMD ["npm", "run", "start"]

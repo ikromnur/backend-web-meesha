@@ -8,8 +8,8 @@ services:
     ports:
       - "4000:4000"
     environment:
-      # Pastikan variabel ini sesuai dengan .env backend Anda
       - PORT=4000
+      # Ganti dengan kredensial database & Tripay yang asli
       - DATABASE_URL=postgresql://user:password@host:5432/dbname
       - APP_BASE_URL=https://meesha.store
       - TRIPAY_API_KEY=ganti_dengan_api_key

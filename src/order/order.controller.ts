@@ -273,35 +273,18 @@ router.get(
         );
       }
 
-      // Check Expiration Logic (Lazy Check)
-      // Jika order PENDING dan sudah melewati paymentExpiresAt, tandai CANCELLED
       const now = new Date();
-      const updates: Promise<any>[] = [];
+      const skewMs = Number(process.env.EXPIRY_SKEW_MS || "120000");
 
       orders.forEach((order) => {
         if (
           (order.status === "PENDING" || order.status === "UNPAID") &&
           order.paymentExpiresAt &&
-          new Date(order.paymentExpiresAt) < now
+          new Date(order.paymentExpiresAt).getTime() + skewMs < now.getTime()
         ) {
-          // Update local object agar respons langsung 'cancelled'
           order.status = "CANCELLED";
-          // Fire-and-forget update DB
-          updates.push(
-            prisma.order
-              .update({
-                where: { id: order.id },
-                data: { status: "CANCELLED" },
-              })
-              .catch(() => {}) // Ignore error
-          );
         }
       });
-
-      // Opsional: tunggu updates selesai jika ingin memastikan DB konsisten sebelum response
-      if (updates.length > 0) {
-        await Promise.all(updates);
-      }
 
       // Re-filter: Jika status berubah karena expired (misal jadi CANCELLED),
       // pastikan ia tidak ikut termuat jika user sedang memfilter status tertentu (misal 'pending').

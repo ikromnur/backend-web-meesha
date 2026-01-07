@@ -15,11 +15,13 @@ export class OrderService {
 
   public async checkExpiredOrders(userId?: string) {
     try {
+      const skewMs = Number(process.env.EXPIRY_SKEW_MS || "120000");
+      const cutoff = new Date(Date.now() - skewMs);
       await this.prisma.order.updateMany({
         where: {
           status: "PENDING",
           paymentExpiresAt: {
-            lt: new Date(),
+            lt: cutoff,
           },
           ...(userId ? { userId } : {}),
         },
@@ -78,11 +80,13 @@ export class OrderService {
 
   async findOne(id: string, userId: string, role: string) {
     // Ensure this specific order is updated if expired
+    const skewMs = Number(process.env.EXPIRY_SKEW_MS || "120000");
+    const cutoff = new Date(Date.now() - skewMs);
     await this.prisma.order.updateMany({
       where: {
         id,
         status: "PENDING",
-        paymentExpiresAt: { lt: new Date() },
+        paymentExpiresAt: { lt: cutoff },
       },
       data: { status: "CANCELLED" },
     });
@@ -149,7 +153,7 @@ export class OrderService {
       // Also ensure product.stock is not already negative
       if (!allowOutOfStock) {
         if (product.stock <= 0) {
-           throw new HttpError(
+          throw new HttpError(
             400,
             `Stok produk "${product.name}" habis. Silakan hapus dari keranjang.`
           );
@@ -306,7 +310,9 @@ export class OrderService {
         );
         // Manual cascade delete for rollback because schema might not have onDelete: Cascade
         try {
-          await this.prisma.orderItem.deleteMany({ where: { orderId: order.id } });
+          await this.prisma.orderItem.deleteMany({
+            where: { orderId: order.id },
+          });
           await this.prisma.order.delete({ where: { id: order.id } });
         } catch (rollbackError) {
           console.error("Rollback failed:", rollbackError);

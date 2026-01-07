@@ -1,0 +1,18 @@
+version: '3.8'
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: meesha-backend
+    ports:
+      - "4000:4000"
+    environment:
+      # Pastikan variabel ini sesuai dengan .env backend Anda
+      - PORT=4000
+      - DATABASE_URL=postgresql://user:password@host:5432/dbname
+      - APP_BASE_URL=https://meesha.store
+      - TRIPAY_API_KEY=ganti_dengan_api_key
+      - TRIPAY_PRIVATE_KEY=ganti_dengan_private_key
+      - TRIPAY_MERCHANT_CODE=ganti_dengan_merchant_code
+    restart: always

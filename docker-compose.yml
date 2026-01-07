@@ -10,9 +10,9 @@ services:
     environment:
       - PORT=4000
       # Ganti dengan kredensial database & Tripay yang asli
-      - DATABASE_URL=postgresql://user:password@host:5432/dbname
+      - DATABASE_URL=postgresql://postgres.klyyaxkskrddwlnqpayj:gwI5c1rZkKprWXw8@aws-1-ap-south-1.pooler.supabase.com:6543/postgres?pgbouncer=true&sslmode=require
       - APP_BASE_URL=https://meesha.store
-      - TRIPAY_API_KEY=ganti_dengan_api_key
-      - TRIPAY_PRIVATE_KEY=ganti_dengan_private_key
-      - TRIPAY_MERCHANT_CODE=ganti_dengan_merchant_code
+      - TRIPAY_API_KEY=DEV-QiIzRdlxXcSQbfJI9Xn4yGEqQP1ygThgGM33UxDL
+      - TRIPAY_PRIVATE_KEY=FlTOV-YqBtu-anlvY-gz8cR-wiSyz
+      - TRIPAY_MERCHANT_CODE=T47085
     restart: always

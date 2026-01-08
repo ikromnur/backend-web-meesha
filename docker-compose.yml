@@ -7,12 +7,27 @@ services:
     container_name: meesha-backend
     ports:
       - "4000:4000"
+    env_file:
+      - .env
     environment:
-      - PORT=4000
-      # Ganti dengan kredensial database & Tripay yang asli
-      - DATABASE_URL=postgresql://postgres.klyyaxkskrddwlnqpayj:gwI5c1rZkKprWXw8@aws-1-ap-south-1.pooler.supabase.com:6543/postgres?pgbouncer=true&sslmode=require
-      - APP_BASE_URL=https://meesha.store
-      - TRIPAY_API_KEY=DEV-QiIzRdlxXcSQbfJI9Xn4yGEqQP1ygThgGM33UxDL
-      - TRIPAY_PRIVATE_KEY=FlTOV-YqBtu-anlvY-gz8cR-wiSyz
-      - TRIPAY_MERCHANT_CODE=T47085
+      - PORT=${PORT}
+      - NODE_ENV=${NODE_ENV}
+      - DATABASE_URL=${DATABASE_URL}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - APP_BASE_URL=${APP_BASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
+      - BREVO_API_KEY=${BREVO_API_KEY}
+      - BREVO_SENDER_EMAIL=${BREVO_SENDER_EMAIL}
+      - BREVO_SENDER_NAME=${BREVO_SENDER_NAME}
+      - TRIPAY_MODE=${TRIPAY_MODE}
+      - TRIPAY_MERCHANT_CODE=${TRIPAY_MERCHANT_CODE}
+      - TRIPAY_API_KEY=${TRIPAY_API_KEY}
+      - TRIPAY_PRIVATE_KEY=${TRIPAY_PRIVATE_KEY}
+      - TRIPAY_CALLBACK_URL=${TRIPAY_CALLBACK_URL}
+      - EMAIL_INVOICE_ENABLED=${EMAIL_INVOICE_ENABLED}
+      - EMAIL_INVOICE_ATTACH_PDF=${EMAIL_INVOICE_ATTACH_PDF}
+      - OTP_DISABLE_COOLDOWN=${OTP_DISABLE_COOLDOWN}
     restart: always

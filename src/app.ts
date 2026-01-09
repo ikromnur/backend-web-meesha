@@ -112,53 +112,26 @@ app.use((req, _res, next) => {
   next();
 });
 
-// Fixer untuk prefix ganda: jika request datang ke /api/api/... maka rewrite ke /api/...
-// Ini membuat backend toleran terhadap mis-konfigurasi proxy frontend.
-app.use((req, _res, next) => {
-  if (typeof req.url === "string") {
-    if (req.url.startsWith("/api/api/")) {
-      req.url = req.url.replace(/^\/api\/api\//, "/api/");
-    } else if (req.url.startsWith("/api/v1/")) {
-      req.url = req.url.replace(/^\/api\/v1\//, "/api/");
-    }
-  }
-  next();
-});
-
-// Static serving for processed uploads
-app.use("/uploads", express.static("uploads"));
-
-// Logging ditangani oleh pino-http di atas
-
-// Enable CORS
-app.use(
-  cors({
-    origin: "*", // allow all for dev
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-  })
-);
-
 // Routes
-app.use("/api/auth", authRoutes);
-app.use("/api/users", userRoutes);
-app.use("/api", userRoutes);
-app.use("/api/products", productRoutes);
-app.use("/api/categories", categoryRoutes);
-app.use("/api/messages", messageRoutes);
-app.use("/api/discounts", discountRoutes);
-app.use("/api/ratings", ratingsRoutes);
-app.use("/api/colors", colorRoutes);
-app.use("/api/objectives", objectiveRoutes);
-app.use("/api/orders", orderRoutes);
-app.use("/api/carts", cartRoutes);
-app.use("/api/upload", uploadImageRoutes);
-app.use("/api/dashboard", dashboardRoutes);
-app.use("/api/admin/orders", ordersAdminRoutes);
-app.use("/api/notifications", notificationRoutes); // Add notification routes
+app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/users", userRoutes);
+app.use("/api/v1", userRoutes);
+app.use("/api/v1/products", productRoutes);
+app.use("/api/v1/categories", categoryRoutes);
+app.use("/api/v1/messages", messageRoutes);
+app.use("/api/v1/discounts", discountRoutes);
+app.use("/api/v1/ratings", ratingsRoutes);
+app.use("/api/v1/colors", colorRoutes);
+app.use("/api/v1/objectives", objectiveRoutes);
+app.use("/api/v1/orders", orderRoutes);
+app.use("/api/v1/carts", cartRoutes);
+app.use("/api/v1/upload", uploadImageRoutes);
+app.use("/api/v1/dashboard", dashboardRoutes);
+app.use("/api/v1/admin/orders", ordersAdminRoutes);
+app.use("/api/v1/notifications", notificationRoutes); // Add notification routes
 
 // Payment Routes (Tripay)
-app.use("/api/payments/tripay", tripayRoutes);
+app.use("/api/v1/payments/tripay", tripayRoutes);
 
 // Root route untuk mengecek status server
 app.get("/", (req, res) => {

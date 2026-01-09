@@ -7,13 +7,13 @@ RUN apt-get update -y && apt-get install -y openssl python3 make g++ && rm -rf /
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
+COPY package.json ./
 
 # Copy prisma schema early so postinstall (prisma generate) works
 COPY prisma ./prisma/
 
-# Install dependencies (WITH scripts to build bcrypt/sharp/prisma)
-RUN npm install
+# Install dependencies (Delete lockfile to force Linux resolution, and rebuild native modules)
+RUN npm install && npm rebuild bcrypt sharp
 
 # Copy the rest of the application
 COPY . .

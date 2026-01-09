@@ -76,24 +76,45 @@ router.get("/", authenticate, async (req: Request, res: Response) => {
 
     const cart = await getUserCartService(userId);
 
-    // Perkaya bentuk respons agar UI konsisten menampilkan gambar
-    const enriched = {
-      totalItems: cart.totalItems,
-      totalPrice: cart.totalPrice,
-      items: (cart.items || []).map((it: any) => ({
+    // Perkaya bentuk respons + normalisasi angka agar UI aman dari NaN
+    const itemsEnriched = (cart.items || []).map((it: any) => {
+      const qtyRaw = it?.quantity;
+      const qty =
+        typeof qtyRaw === "number" ? qtyRaw : Number(qtyRaw) || 0;
+      const priceRaw = it?.product?.price;
+      const unitPrice =
+        typeof priceRaw === "number" ? priceRaw : Number(priceRaw) || 0;
+      const subtotal = unitPrice * qty;
+
+      return {
         ...it,
+        quantity: qty,
+        unitPrice,
+        subtotal,
         product: {
           ...it.product,
           imageMain: resolveImageMain(it.product?.imageUrl),
           images: normalizeImages(it.product?.imageUrl),
         },
-      })),
+      };
+    });
+
+    const totalItems = itemsEnriched.reduce((sum: number, x: any) => sum + (typeof x.quantity === "number" ? x.quantity : 0), 0);
+    const totalPrice = itemsEnriched.reduce((sum: number, x: any) => sum + (typeof x.subtotal === "number" ? x.subtotal : 0), 0);
+
+    const enriched = {
+      totalItems,
+      totalPrice,
+      items: itemsEnriched,
     };
 
     return res.status(200).json({
       success: true,
       message: "Cart retrieved successfully",
       data: enriched,
+      items: itemsEnriched,
+      totalItems,
+      totalPrice,
     });
   } catch (error: any) {
     console.error("[CART CONTROLLER] Error getting cart:", error);
@@ -176,15 +197,26 @@ router.post("/", authenticate, async (req: Request, res: Response) => {
       });
     }
 
-    const cartItem = await addToCartService(userId, {
-      productId,
-      quantity,
-      size,
-    });
+  const cartItem = await addToCartService(userId, {
+    productId,
+    quantity,
+    size,
+  });
 
-    // Perkaya respons satu item untuk kompatibilitas UI
+    // Perkaya respons satu item + normalisasi angka (unitPrice/subtotal)
+    const priceRaw = (cartItem as any)?.product?.price;
+    const unitPrice =
+      typeof priceRaw === "number" ? priceRaw : Number(priceRaw) || 0;
+    const qtyRaw = (cartItem as any)?.quantity;
+    const qty =
+      typeof qtyRaw === "number" ? qtyRaw : Number(qtyRaw) || 0;
+    const subtotal = unitPrice * qty;
+
     const enrichedItem = {
       ...cartItem,
+      unitPrice,
+      subtotal,
+      quantity: qty,
       product: {
         ...cartItem.product,
         imageMain: resolveImageMain(cartItem.product?.imageUrl),
@@ -264,13 +296,24 @@ router.put("/:id", authenticate, async (req: Request, res: Response) => {
       }
     }
 
-    const updatedItem = await updateCartItemService(cartId, userId, {
-      quantity,
-      size,
-    });
+  const updatedItem = await updateCartItemService(cartId, userId, {
+    quantity,
+    size,
+  });
+
+    const priceRaw = (updatedItem as any)?.product?.price;
+    const unitPrice =
+      typeof priceRaw === "number" ? priceRaw : Number(priceRaw) || 0;
+    const qtyRaw = (updatedItem as any)?.quantity;
+    const qty =
+      typeof qtyRaw === "number" ? qtyRaw : Number(qtyRaw) || 0;
+    const subtotal = unitPrice * qty;
 
     const enrichedItem = {
       ...updatedItem,
+      unitPrice,
+      subtotal,
+      quantity: qty,
       product: {
         ...updatedItem.product,
         imageMain: resolveImageMain(updatedItem.product?.imageUrl),

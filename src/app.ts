@@ -31,7 +31,7 @@ import prisma from "./lib/prisma";
 import { authenticate } from "./middleware/auth.middleware";
 import { OrderService } from "./order/order.service";
 import helmet from "helmet";
-import rateLimit from "express-rate-limit";
+// import rateLimit from "express-rate-limit";
 import pinoHttp from "pino-http";
 
 // Initialize Scheduler
@@ -61,6 +61,7 @@ process.on("unhandledRejection", (err) => {
 
 // Inisialisasi aplikasi Express
 const app = express();
+app.set("trust proxy", 1); // Trust first proxy (Nginx/Cloudflare)
 const PORT = Number(process.env.PORT || 4000);
 const orderService = new OrderService(prisma as any);
 const isProd =
@@ -84,15 +85,15 @@ const rawBodySaver = (req: any, _res: any, buf: Buffer) => {
 };
 app.use(express.json({ verify: rawBodySaver }));
 app.use(express.urlencoded({ extended: true }));
+app.use(cors()); // Enable CORS for all routes
 app.use(helmet());
-app.use(
-  rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: isProd ? 100 : 1000,
-    standardHeaders: true,
-    legacyHeaders: false,
-  })
-);
+// Serve static files from uploads directory
+app.use("/uploads", express.static("uploads"));
+
+// DISABLE RATE LIMITER SEMENTARA (User Report 429 Error)
+// Rate limiter code has been completely removed to prevent 429 errors.
+console.log("RATE LIMITER REMOVED - REVISION 2026-01-11");
+
 app.use(logger);
 
 // Mendukung method override untuk klien/proxy yang membatasi PATCH/PUT/DELETE
@@ -115,23 +116,41 @@ app.use((req, _res, next) => {
 // Routes
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/users", userRoutes);
-app.use("/api/v1", userRoutes);
+app.use("/api/users", userRoutes); // Alias
 app.use("/api/v1/products", productRoutes);
+app.use("/api/products", productRoutes); // Alias
 app.use("/api/v1/categories", categoryRoutes);
+app.use("/api/categories", categoryRoutes); // Alias
 app.use("/api/v1/messages", messageRoutes);
+app.use("/api/messages", messageRoutes); // Alias
 app.use("/api/v1/discounts", discountRoutes);
+app.use("/api/discounts", discountRoutes); // Alias
 app.use("/api/v1/ratings", ratingsRoutes);
+app.use("/api/ratings", ratingsRoutes); // Alias
 app.use("/api/v1/colors", colorRoutes);
+app.use("/api/colors", colorRoutes); // Alias
 app.use("/api/v1/objectives", objectiveRoutes);
+app.use("/api/objectives", objectiveRoutes); // Alias
 app.use("/api/v1/orders", orderRoutes);
+// Alias for frontend compatibility
+app.use("/api/orders", orderRoutes);
 app.use("/api/v1/carts", cartRoutes);
+app.use("/api/carts", cartRoutes); // Alias
 app.use("/api/v1/upload", uploadImageRoutes);
+app.use("/api/upload", uploadImageRoutes); // Alias
 app.use("/api/v1/dashboard", dashboardRoutes);
+app.use("/api/dashboard", dashboardRoutes); // Alias
+// Alias for double v1 error (frontend proxy issue)
+app.use("/api/v1/v1/dashboard", dashboardRoutes);
 app.use("/api/v1/admin/orders", ordersAdminRoutes);
-app.use("/api/v1/notifications", notificationRoutes); // Add notification routes
+app.use("/api/admin/orders", ordersAdminRoutes); // Alias
+app.use("/api/v1/notifications", notificationRoutes);
+app.use("/api/notifications", notificationRoutes); // Add notification routes
 
 // Payment Routes (Tripay)
 app.use("/api/v1/payments/tripay", tripayRoutes);
+// Alias for frontend compatibility
+app.use("/api/payments/tripay", tripayRoutes);
 
 // Root route untuk mengecek status server
 app.get("/", (req, res) => {

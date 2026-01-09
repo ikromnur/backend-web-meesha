@@ -233,21 +233,15 @@ export const sendOtpForPurpose = async (
   await createOtpCode(canonicalEmail, otpHash, purpose, expiresAt);
 
   // Kirim OTP via email menggunakan Brevo (SMTP)
-  try {
-    if (purpose === "REGISTER") {
-      await emailService.sendVerificationOtp(
-        canonicalEmail,
-        code,
-        OTP_TTL_MINUTES
-      );
-    } else {
-      await emailService.sendPasswordResetOtp(canonicalEmail, code);
-    }
-  } catch (e) {
-    console.warn(
-      "[AUTH SERVICE] Failed to send OTP email:",
-      (e as any)?.message || e
+  // try-catch removed to propagate errors to controller (so frontend knows it failed)
+  if (purpose === "REGISTER") {
+    await emailService.sendVerificationOtp(
+      canonicalEmail,
+      code,
+      OTP_TTL_MINUTES
     );
+  } else {
+    await emailService.sendPasswordResetOtp(canonicalEmail, code);
   }
 
   // For forgot-password, set reset window until TTL

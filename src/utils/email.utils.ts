@@ -1,8 +1,17 @@
 import axios from "axios";
+import dotenv from "dotenv";
+import path from "path";
+
+// Ensure env vars are loaded (and reloaded if changed)
+dotenv.config();
+
 const BREVO_API_KEY = process.env.BREVO_API_KEY || "";
 
 // Robust parsing for EMAIL_FROM that may be in format: "Name <email@domain>"
 export const resolveSender = () => {
+  // Reload env vars to ensure we have the latest values
+  dotenv.config({ path: path.resolve(process.cwd(), ".env"), override: true });
+
   const rawFrom =
     process.env.BREVO_SENDER_EMAIL ||
     process.env.EMAIL_FROM ||
@@ -49,7 +58,12 @@ const brevoSend = async (
   tags?: string[],
   attachments?: { name: string; contentBase64: string }[]
 ) => {
-  if (!BREVO_API_KEY) {
+  // Always read fresh from env to support hot-reloading of .env
+  // Force reload .env to pick up changes without server restart
+  dotenv.config({ path: path.resolve(process.cwd(), ".env"), override: true });
+  const apiKey = process.env.BREVO_API_KEY || "";
+
+  if (!apiKey) {
     throw new Error("BREVO_API_KEY is missing in environment variables");
   }
 
@@ -84,7 +98,7 @@ const brevoSend = async (
   }
 
   const headers = {
-    "api-key": BREVO_API_KEY,
+    "api-key": apiKey,
     "Content-Type": "application/json",
   };
 
@@ -105,6 +119,7 @@ const brevoSend = async (
     return response.data;
   } catch (error: any) {
     console.error(`[Brevo] Send Error: ${formatAxiosError(error)}`);
+    // Re-throw so caller knows it failed
     throw error;
   }
 };
@@ -185,16 +200,16 @@ export default {
     const subject = "Password Reset OTP";
     const html = `
     <div style="font-family: Arial, sans-serif; color: #333;">
-      <h2>Password Reset Request</h2>
-      <p>Hello,</p>
-      <p>You requested a password reset. Use the following One-Time Password (OTP) to reset your password. This OTP is valid for ${ttlMinutes} minutes.</p>
+      <h2>Reset Password Meesha</h2>
+      <p>Halo,</p>
+      <p>Gunakan Kode OTP berikut untuk mereset password Anda. Kode ini berlaku selama ${ttlMinutes} minutes.</p>
       <p style="font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #000;">${otp}</p>
-      <p>If you did not request a password reset, please ignore this email.</p>
-      <p>Thanks,<br/>The Meesha Team</p>
+      <p>Jika Anda tidak meminta reset password, abaikan email ini.</p>
+      <p>Terima kasih,<br/>Tim Meesha</p>
     </div>
   `;
     try {
-      await brevoSend(toEmail, subject, html, ["otp-reset"]);
+      await brevoSend(toEmail, subject, html, ["otp-reset-password"]);
       console.log(`Password reset OTP sent to ${toEmail}`);
     } catch (error) {
       console.error(
@@ -204,29 +219,6 @@ export default {
       );
       throw new Error("Could not send password reset email.");
     }
-  },
-
-  async sendAdminNotification(subject: string, message: string) {
-    const { email: senderEmail } = resolveSender();
-    // Assuming the admin email is the same as sender, or configured via ADMIN_EMAIL
-    const adminEmail = process.env.ADMIN_EMAIL || senderEmail;
-
-    if (!adminEmail) {
-      console.warn(
-        "Cannot send admin notification: ADMIN_EMAIL or EMAIL_FROM not set"
-      );
-      return;
-    }
-
-    const html = `
-      <div style="font-family: Arial, sans-serif; color: #333;">
-        <h2>Admin Notification</h2>
-        <p>${message}</p>
-        <p>Time: ${new Date().toLocaleString()}</p>
-      </div>
-    `;
-
-    return brevoSend(adminEmail, subject, html, ["admin-notification"]);
   },
 
   async sendPickupReminderEmail(
@@ -300,5 +292,24 @@ export default {
     }
 
     return brevoSend(toEmail, subject, html, ["pickup-reminder", type]);
+  },
+
+  async sendAdminNotification(subject: string, htmlContent: string) {
+    const { email: senderEmail } = resolveSender();
+    // Prioritaskan ADMIN_EMAIL jika ada, jika tidak gunakan senderEmail sebagai tujuan (self-notification)
+    const adminEmail = process.env.ADMIN_EMAIL || senderEmail;
+
+    try {
+      console.log(
+        `[Admin Notif] Sending to ${adminEmail} subject="${subject}"`
+      );
+      await brevoSend(adminEmail, subject, htmlContent, ["admin-notification"]);
+      console.log(`Admin notification sent to ${adminEmail}`);
+    } catch (error) {
+      console.error(
+        `Failed to send admin notification: ${formatAxiosError(error)}`
+      );
+      // Jangan throw error agar flow utama tidak putus
+    }
   },
 };

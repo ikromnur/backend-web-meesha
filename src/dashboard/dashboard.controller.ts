@@ -1,16 +1,51 @@
-import { Router, Request, Response } from "express";
+﻿import { Router, Request, Response } from "express";
 import prisma from "../lib/prisma";
 import { authenticate, authorizeAdmin } from "../middleware/auth.middleware";
 
 const router = Router();
 
 function parseDateRange(dateStr?: string) {
-  const today = new Date();
-  const date = dateStr ? new Date(`${dateStr}T00:00:00Z`) : new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
-  const start = new Date(date);
-  const end = new Date(date);
-  end.setUTCHours(23, 59, 59, 999);
-  return { start, end };
+  try {
+    // Jika 'date' tidak diberikan, gunakan tanggal HARI INI di zona waktu Asia/Jakarta
+    if (!dateStr) {
+      try {
+        const todayJakarta = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Asia/Jakarta",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).format(new Date());
+        dateStr = todayJakarta; // yyyy-MM-dd
+      } catch (e) {
+        // Fallback jika Asia/Jakarta tidak didukung
+        const now = new Date();
+        dateStr = now.toISOString().split("T")[0];
+      }
+    }
+    // Validasi format yyyy-MM-dd
+    const isoDatePattern = /^\d{4}-\d{2}-\d{2}$/;
+    if (!isoDatePattern.test(dateStr)) {
+       const now = new Date();
+       dateStr = now.toISOString().split("T")[0];
+    }
+    // Bangun rentang berdasarkan Asia/Jakarta (+07:00)
+    const start = new Date(`${dateStr}T00:00:00+07:00`);
+    const end = new Date(`${dateStr}T23:59:59.999+07:00`);
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      // Fallback ke UTC
+      const s = new Date(`${dateStr}T00:00:00Z`);
+      const e = new Date(`${dateStr}T23:59:59.999Z`);
+      return { start: s, end: e };
+    }
+    return { start, end };
+  } catch (error) {
+    console.error("Error parsing date range:", error);
+    const now = new Date();
+    const s = new Date(now.setHours(0,0,0,0));
+    const e = new Date(now.setHours(23,59,59,999));
+    return { start: s, end: e };
+  }
 }
 
 router.get("/stats", authenticate, authorizeAdmin, async (req: Request, res: Response) => {

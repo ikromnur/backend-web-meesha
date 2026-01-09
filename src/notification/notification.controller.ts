@@ -21,9 +21,11 @@ router.get("/", authenticate, async (req: Request, res: Response, next: NextFunc
 router.get("/unread-count", authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = (req as any).user.userId;
+    console.log(`[Notification] getUnreadCount for user ${userId}`);
     const count = await notificationService.getUnreadCount(userId);
     res.json({ data: { count } });
   } catch (error) {
+    console.error("[Notification] getUnreadCount error:", error);
     next(error);
   }
 });

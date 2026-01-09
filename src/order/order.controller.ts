@@ -206,18 +206,14 @@ router.get(
       // Default filter 'all' agar frontend menerima semua data dan bisa filter client-side
       const qStatus = String(req.query.status || "all").toLowerCase();
 
+      // FIXED: Removed invalid statuses (UNPAID, NEW) that caused Prisma errors
       const statusFilterMap: Record<string, string[]> = {
-        pending: ["PENDING", "UNPAID", "NEW"],
-        processing: [
-          "PROCESSING",
-          "IN_PROGRESS",
-          "PAID",
-          "SUCCESS",
-          "READY_FOR_PICKUP",
-        ],
+        pending: ["PENDING"],
+        unpaid: ["PENDING"],
+        processing: ["PROCESSING"],
         ambil: ["READY_FOR_PICKUP"], // Tab khusus jika diperlukan
         completed: ["COMPLETED", "PICKED_UP"],
-        cancelled: ["CANCELLED", "FAILED", "EXPIRED", "REFUNDED"],
+        cancelled: ["CANCELLED"],
         all: [],
       };
 
@@ -278,10 +274,13 @@ router.get(
 
       orders.forEach((order) => {
         if (
-          (order.status === "PENDING" || order.status === "UNPAID") &&
+          order.status === "PENDING" &&
           order.paymentExpiresAt &&
           new Date(order.paymentExpiresAt).getTime() + skewMs < now.getTime()
         ) {
+          console.log(
+            `[getOrders] Auto-cancelling expired order ${order.id}. Expires=${order.paymentExpiresAt}, Now=${now}`
+          );
           order.status = "CANCELLED";
         }
       });
@@ -305,6 +304,47 @@ router.get(
         return toFrontendOrder(o, i, ratingsMap);
       });
       res.status(200).json({ data: dto });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// GET /api/orders/:id - Get order detail
+router.get(
+  "/:id",
+  authenticate,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user?.userId;
+      const role = req.user?.role;
+
+      // Gunakan orderService.findOne yang sudah ada logic validasi ownership
+      const order = (await orderService.findOne(id, userId!, role!)) as any;
+
+      if (!order) {
+        return res.status(404).json({
+          success: false,
+          message: "Order tidak ditemukan",
+        });
+      }
+
+      // Format response sesuai kebutuhan frontend (DTO)
+      // Gunakan logic yang sama dengan getOrders (toFrontendOrder)
+      const ratingsMap: Record<string, any> = {};
+      if (Array.isArray(order.ratings)) {
+        order.ratings.forEach((r: any) => {
+          if (r.productId) {
+            ratingsMap[r.productId] = r;
+          }
+        });
+      }
+
+      const dto = toFrontendOrder(order, 0, ratingsMap);
+
+      // Bungkus dalam { data: ... }
+      return res.status(200).json({ data: dto });
     } catch (error) {
       next(error);
     }

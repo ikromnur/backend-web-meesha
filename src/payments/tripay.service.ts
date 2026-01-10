@@ -583,6 +583,52 @@ export const processTripayCallback = async (
       if (isPaid) {
         data.paidAt = new Date();
 
+        // 3.6) Kirim notifikasi email ke Admin (khusus admin) saat pesanan dibayar
+        // Pastikan ini hanya dikirim sekali (saat transisi ke PAID)
+        const wasPaidBefore = Boolean((order as any).paidAt);
+        if (!wasPaidBefore) {
+          try {
+            const adminSubject = `[Admin] Pesanan Dibayar #${merchant_ref}`;
+            const adminMsg = `Pesanan #${merchant_ref} telah dibayar oleh user ${
+              order.user?.name || "Guest"
+            } (${order.user?.email || "-"}). Total: Rp${Number(
+              amountNum || (order as any).totalAmount || 0
+            ).toLocaleString("id-ID")}. Metode: ${
+              payment_method || (order as any).paymentMethod || "-"
+            }. Status: ${target}.`;
+
+            // Kirim email ke admin
+            await email.sendAdminNotification(adminSubject, adminMsg);
+            console.info(
+              `[Tripay Callback] Admin email notification sent for order #${merchant_ref}`
+            );
+
+            // 3.7) Kirim notifikasi In-App ke semua Admin
+            const admins = await prisma.user.findMany({
+              where: { role: "ADMIN" },
+              select: { id: true },
+            });
+            const notificationService = new NotificationService(prisma);
+            for (const admin of admins) {
+              await notificationService.create({
+                userId: admin.id,
+                title: "Pesanan Baru Dibayar",
+                message: `Order #${merchant_ref} telah dibayar. Segera proses pesanan ini.`,
+                type: "INFO",
+                link: `/dashboard/orders/${order.id}`,
+              });
+            }
+            console.info(
+              `[Tripay Callback] Admin in-app notifications sent to ${admins.length} admins`
+            );
+          } catch (e) {
+            console.error(
+              `[Tripay Callback] Failed to send admin notification:`,
+              e
+            );
+          }
+        }
+
         // Record Discount Usage if not already recorded
         // Note: discountService.recordUsage handles idempotency (P2002)
         if ((order as any).discountCode && (order as any).userId) {
@@ -740,6 +786,48 @@ export const processTripayCallback = async (
           } catch (_) {
             // Jangan gagalkan webhook bila email gagal
           }
+        }
+      }
+
+      // 3.6) Kirim notifikasi email ke Admin (khusus admin) saat pesanan dibayar
+      if (isPaid && !wasPaidBefore) {
+        try {
+          const adminSubject = `[Admin] Pesanan Dibayar #${merchant_ref}`;
+          const adminMsg = `Pesanan #${merchant_ref} telah dibayar oleh user ${
+            order.user?.name || "Guest"
+          } (${order.user?.email || "-"}). Total: Rp${Number(
+            amountNum || order.totalAmount || 0
+          ).toLocaleString("id-ID")}. Metode: ${
+            payment_method || order.paymentMethod || "-"
+          }. Status: ${target}.`;
+          await email.sendAdminNotification(adminSubject, adminMsg);
+          console.info(
+            `[Tripay Callback] Admin email notification sent for order #${merchant_ref}`
+          );
+
+          // 3.7) Kirim notifikasi In-App ke semua Admin
+          const admins = await prisma.user.findMany({
+            where: { role: "ADMIN" },
+            select: { id: true },
+          });
+          const notificationService = new NotificationService(prisma);
+          for (const admin of admins) {
+            await notificationService.create({
+              userId: admin.id,
+              title: "Pesanan Baru Dibayar",
+              message: `Order #${merchant_ref} telah dibayar. Segera proses pesanan ini.`,
+              type: "INFO",
+              link: `/dashboard/orders/${order.id}`,
+            });
+          }
+          console.info(
+            `[Tripay Callback] Admin in-app notifications sent to ${admins.length} admins`
+          );
+        } catch (e) {
+          console.error(
+            `[Tripay Callback] Failed to send admin notification:`,
+            e
+          );
         }
       }
 
@@ -921,16 +1009,24 @@ export const getTransactionDetail = async (params: {
 
     return normalized;
   } catch (error: any) {
+    // 1. Resolve Order ID from Reference if needed (untuk self-healing/fallback)
+    let resolvedOrderId = params.merchantRef;
+    if (!resolvedOrderId && params.reference) {
+      try {
+        const o = await prisma.order.findFirst({
+          where: { tripayReference: params.reference },
+          select: { id: true },
+        });
+        if (o) resolvedOrderId = o.id;
+      } catch (_) {}
+    }
+
     // SELF-HEALING: Jika transaksi tidak ditemukan di Tripay (404/400) tapi ada di DB (PENDING),
     // kita coba buat ulang transaksi tersebut agar user bisa bayar.
-    if (
-      (error.status === 404 || error.status === 400) &&
-      params.merchantRef &&
-      !params.reference
-    ) {
+    if ((error.status === 404 || error.status === 400) && resolvedOrderId) {
       try {
         const order = await prisma.order.findUnique({
-          where: { id: params.merchantRef },
+          where: { id: resolvedOrderId },
           include: {
             user: true,
             orderItems: { include: { product: true } },
@@ -978,6 +1074,32 @@ export const getTransactionDetail = async (params: {
         // Jika self-heal gagal, lempar error asli
       }
     }
+
+    // Fallback: If Tripay fails (404/400) but we have the order locally, return local data
+    // This allows the payment page to load (with "Unpaid" status) even if Tripay transaction is missing.
+    if (resolvedOrderId) {
+      try {
+        const local = await prisma.order.findUnique({
+          where: { id: resolvedOrderId },
+        });
+        if (local) {
+          return {
+            status: local.status === "PENDING" ? "UNPAID" : local.status,
+            merchant_ref: local.id,
+            reference: local.tripayReference || null,
+            amount: Number(local.totalAmount),
+            payment_method: local.paymentMethod,
+            payment_method_code: local.paymentMethodCode,
+            expired_time: local.paymentExpiresAt
+              ? Math.floor(local.paymentExpiresAt.getTime() / 1000)
+              : undefined,
+            instructions: [],
+            is_local_fallback: true,
+          };
+        }
+      } catch (_) {}
+    }
+
     throw error;
   }
 };

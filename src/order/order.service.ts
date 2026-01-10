@@ -17,7 +17,9 @@ export class OrderService {
     try {
       const skewMs = Number(process.env.EXPIRY_SKEW_MS || "120000");
       const cutoff = new Date(Date.now() - skewMs);
-      await this.prisma.order.updateMany({
+
+      // Find candidates first for logging
+      const candidates = await this.prisma.order.findMany({
         where: {
           status: "PENDING",
           paymentExpiresAt: {
@@ -25,10 +27,28 @@ export class OrderService {
           },
           ...(userId ? { userId } : {}),
         },
-        data: {
-          status: "CANCELLED",
-        },
+        select: { id: true, paymentExpiresAt: true },
       });
+
+      if (candidates.length > 0) {
+        console.log(
+          `[checkExpiredOrders] Cancelling ${
+            candidates.length
+          } orders: ${candidates
+            .map((c) => `${c.id} (Exp: ${c.paymentExpiresAt})`)
+            .join(", ")}`
+        );
+
+        await this.prisma.order.updateMany({
+          where: {
+            id: { in: candidates.map((c) => c.id) },
+            status: "PENDING", // Double check status
+          },
+          data: {
+            status: "CANCELLED",
+          },
+        });
+      }
     } catch (error) {
       // Ignore errors during background update to not block the main request
       console.error("Failed to update expired orders:", error);
@@ -239,8 +259,8 @@ export class OrderService {
     // Hitung minPickupAt dan paymentExpiresAt
     const now = new Date();
     const minPickupAt = calculateMinPickupAt(now, availabilities as any);
-    // Extend payment expiry to 24 hours to match typical payment gateway windows
-    const paymentExpiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    // Set payment expiry to 1 hour (was 24 hours) as per user request
+    const paymentExpiresAt = new Date(now.getTime() + 1 * 60 * 60 * 1000);
 
     // Validasi pickupAt bila ada
     if (pickupAtDate) {

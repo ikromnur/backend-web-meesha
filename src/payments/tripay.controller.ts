@@ -35,6 +35,65 @@ router.get("/channels", async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/payments/tripay/transaction/:reference - Get transaction detail
+router.get(
+  "/transaction/:reference",
+  authenticate,
+  async (req: Request, res: Response) => {
+    try {
+      const { reference } = req.params;
+      // Deteksi apakah reference adalah UUID (berarti merchantRef / orderId)
+      const isUuid =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          reference
+        );
+
+      // Jika UUID, kirim sebagai merchantRef agar service dapat melakukan self-healing/fallback
+      const detail = await getTransactionDetail(
+        isUuid ? { merchantRef: reference } : { reference }
+      );
+      return res.json({ success: true, data: detail });
+    } catch (error: any) {
+      return res.status(error.status || 500).json({
+        success: false,
+        message: error.message || "Gagal mengambil detail transaksi",
+      });
+    }
+  }
+);
+
+// GET /api/payments/tripay/transaction/by-order/:orderId - Get transaction by Order ID
+router.get(
+  "/transaction/by-order/:orderId",
+  authenticate,
+  async (req: Request, res: Response) => {
+    try {
+      const { orderId } = req.params;
+      const order = await prisma.order.findUnique({
+        where: { id: orderId },
+        select: { tripayReference: true },
+      });
+
+      if (!order || !order.tripayReference) {
+        return res.status(404).json({
+          success: false,
+          message: "Transaksi Tripay tidak ditemukan untuk order ini",
+        });
+      }
+
+      const detail = await getTransactionDetail({
+        reference: order.tripayReference,
+      });
+      return res.json({ success: true, data: detail });
+    } catch (error: any) {
+      return res.status(error.status || 500).json({
+        success: false,
+        message: error.message || "Gagal mengambil detail transaksi",
+      });
+    }
+  }
+);
+
 router.post("/closed", authenticate, async (req: Request, res: Response) => {
   try {
     console.log(
@@ -243,6 +302,14 @@ router.post("/closed", authenticate, async (req: Request, res: Response) => {
 
     // Jika orderId tidak diberikan atau belum ada di DB, buat Order dari items payload atau cart user
     const orderService = new OrderService(prisma);
+
+    // Validasi format UUID untuk orderId. Jika format salah (misal "INV-..."),
+    // anggap belum ada order (null) agar dibuatkan order baru.
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (orderId && !uuidRegex.test(orderId)) {
+      orderId = "";
+    }
 
     // Bangun items Tripay dari cart jika tidak ada di body; jika order_items ada, gunakan itu
     if (!items || items.length === 0) {

@@ -40,38 +40,60 @@ export function calculateMinPickupAt(
   const openParts = hhmmToParts(open);
 
   if (dayOffset === 0) {
-    // READY STOCK: Buffer 3 jam
-    const bufferMs = 3 * 60 * 60 * 1000;
-    // Gunakan createdAt yang sudah dibulatkan ke menit/detik 00 agar tidak gagal validasi karena milidetik
-    const baseTime = new Date(createdAtUtc);
-    baseTime.setSeconds(0, 0);
-    const candidateUtc = new Date(baseTime.getTime() + bufferMs);
-    const candidateJakarta = toJakartaLocal(candidateUtc);
+    // READY STOCK: Buffer 3 jam (Calculated within operating hours)
+    const durationMinutes = 3 * 60;
 
-    const closeParts = hhmmToParts(close);
+    // Start calculation from created time
+    let current = toJakartaLocal(createdAtUtc);
+    let remainingMinutes = durationMinutes;
 
-    const candMins = candidateJakarta.hours * 60 + candidateJakarta.minutes;
+    const closeParts = hhmmToParts(close); // Re-added this line
+
     const openMins = openParts.h * 60 + openParts.m;
     const closeMins = closeParts.h * 60 + closeParts.m;
 
-    if (candMins < openMins) {
-      // Belum buka, geser ke jam buka hari tersebut
-      candidateJakarta.hours = openParts.h;
-      candidateJakarta.minutes = openParts.m;
-      candidateJakarta.seconds = 0;
-      return jakartaPartsToUtc(candidateJakarta);
-    } else if (candMins > closeMins) {
-      // Sudah tutup, geser ke jam buka hari berikutnya
-      // Gunakan candidateJakarta sebagai basis agar hari sudah sesuai (jika rollover)
-      const nextDay = addDaysJakarta(candidateJakarta, 1);
-      nextDay.hours = openParts.h;
-      nextDay.minutes = openParts.m;
-      nextDay.seconds = 0;
-      return jakartaPartsToUtc(nextDay);
-    } else {
-      // Within hours
-      return candidateUtc;
+    // Safety loop to prevent infinite loops (max 5 days)
+    for (let i = 0; i < 5; i++) {
+      const currentMins = current.hours * 60 + current.minutes;
+
+      // 1. If before open, jump to open
+      if (currentMins < openMins) {
+        current.hours = openParts.h;
+        current.minutes = openParts.m;
+        current.seconds = 0;
+        // Recalculate mins
+      }
+      // 2. If after close, jump to next day open
+      else if (currentMins >= closeMins) {
+        current = addDaysJakarta(current, 1);
+        current.hours = openParts.h;
+        current.minutes = openParts.m;
+        current.seconds = 0;
+        continue; // Retry logic with new time
+      }
+
+      // 3. Calculate available time today
+      // Re-read current mins after potential adjustments
+      const validStartMins = current.hours * 60 + current.minutes;
+      const availableToday = closeMins - validStartMins;
+
+      if (availableToday >= remainingMinutes) {
+        // Can finish today
+        const finishDate = jakartaPartsToUtc(current); // Base UTC
+        // Add remaining minutes
+        return new Date(finishDate.getTime() + remainingMinutes * 60000);
+      } else {
+        // Cannot finish today, use up all available time and move to next day
+        remainingMinutes -= availableToday;
+        current = addDaysJakarta(current, 1);
+        current.hours = openParts.h;
+        current.minutes = openParts.m;
+        current.seconds = 0;
+      }
     }
+
+    // Fallback if loop exhausted (should not happen for reasonable durations)
+    return jakartaPartsToUtc(current);
   }
 
   // Jika PREORDER atau dibuat di luar jam operasional, set ke hari berikutnya (atau offset) pada jam buka

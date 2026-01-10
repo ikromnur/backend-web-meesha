@@ -10,6 +10,7 @@ const orderService = new OrderService(prisma as any);
 
 const ALLOWED_STATUS = [
   "pending",
+  "unpaid",
   "processing",
   "ready",
   "completed",
@@ -176,10 +177,13 @@ router.get(
       }
       where[dateField] = { gte: range.start, lte: range.end };
       if (statusFilter !== "all") {
-        where.status =
-          statusFilter === "ready"
-            ? ("READY_FOR_PICKUP" as OrderStatus)
-            : (statusFilter.toUpperCase() as any as OrderStatus);
+        if (statusFilter === "ready") {
+          where.status = "READY_FOR_PICKUP" as OrderStatus;
+        } else if (statusFilter === "unpaid") {
+          where.status = "PENDING" as OrderStatus;
+        } else {
+          where.status = statusFilter.toUpperCase() as any as OrderStatus;
+        }
       }
 
       // Pencarian bebas di nama/email/phone pengguna dan nama produk
